@@ -113,23 +113,40 @@ document.addEventListener('click', (e) => {
     if (anchor && anchor.href && anchor.href.startsWith('http') && !anchor.href.includes('localhost') && !anchor.href.includes('127.0.0.1')) {
         if (anchor.dataset.phiswallVerified === 'true') return;
 
+        // Preserve native behavior for modifier keys (open in new tab/window)
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) {
+            return;
+        }
+
+        // Preserve native behavior for target="_blank" and downloads
+        if (anchor.target === '_blank' || anchor.hasAttribute('download')) {
+            return;
+        }
+
+        // Preserve SPA routing for same-origin links (fixes navigation issues on sites like GitHub)
+        try {
+            if (new URL(anchor.href).origin === window.location.origin) {
+                return;
+            }
+        } catch (err) {}
+
         e.preventDefault();
         e.stopPropagation();
 
         const url = anchor.href;
         chrome.runtime.sendMessage({ action: "scanUrl", url: url }, (response) => {
+            const proceed = () => {
+                anchor.dataset.phiswallVerified = 'true';
+                window.location.href = url;
+            };
+
             if (response && response.success) {
-                showWarning(response.data, url, () => {
-                    anchor.dataset.phiswallVerified = 'true';
-                    anchor.click();
-                });
+                showWarning(response.data, url, proceed);
                 if (response.data.risk_level === 'LOW') {
-                    anchor.dataset.phiswallVerified = 'true';
-                    setTimeout(() => anchor.click(), 500);
+                    setTimeout(proceed, 500);
                 }
             } else {
-                anchor.dataset.phiswallVerified = 'true';
-                anchor.click();
+                proceed();
             }
         });
     }
