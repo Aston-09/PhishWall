@@ -154,6 +154,35 @@
     }
 }
 
+.phiswall-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #11c05d;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(17, 192, 93, 0.4);
+    animation: phiswall-slide-up 0.5s cubic-bezier(0.85, 0, 0.15, 1);
+}
+
+@keyframes phiswall-slide-up {
+    from { transform: translateY(100px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes phiswall-toast-fade-out {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(100px); opacity: 0; }
+}
+
 .phiswall-blocked-screen {
     position: fixed;
     top: 0;
@@ -186,5 +215,35 @@
     border-radius: 40px 4px;
     color: white;
     max-width: 600px;
+    width: 90%;
+    box-sizing: border-box;
     box-shadow: 25px 25px 0px rgba(0, 0, 0, 0.1);
+}
+
+@media screen and (max-width: 480px) {
+    .phiswall-warning-overlay {
+        width: 90%;
+        right: 5%;
+        left: 5%;
+        top: 15px;
+        padding: 16px;
+        box-sizing: border-box;
+    }
+
+    .phiswall-btn {
+        padding: 16px;
+        font-size: 14px;
+    }
+
+    .phiswall-blocked-screen h1 {
+        font-size: 36px;
+    }
+
+    .phiswall-warning-box {
+        padding: 24px;
+    }
+
+    .phiswall-actions {
+        flex-direction: column;
+    }
 }

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Banner Test</title>
+    <link rel="stylesheet" href="content.css">
+</head>
+<body style="background: #f0f0f0; height: 200vh; padding: 50px; font-family: sans-serif;">
+    <h1>Test Page for PhishWall Banner</h1>
+    <p>Scroll down or wait to see the injection.</p>
+
+    <!-- Mock chrome runtime for content.js to not crash -->
+    <script>
+        window.chrome = {
+            runtime: {
+                sendMessage: (msg, callback) => {
+                    console.log("Mock message:", msg);
+                    if (callback) {
+                        callback({
+                            success: true,
+                            data: {
+                                risk_score: 85,
+                                risk_level: 'HIGH',
+                                reasons: ['Suspicious ML heuristics']
+                            }
+                        });
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="content.js?v=2"></script>
+    <script>
+        // Manually trigger the warning for testing
+        setTimeout(() => {
+            showWarning({
+                risk_score: 85,
+                risk_level: 'HIGH',
+                reasons: ['Suspicious ML heuristics']
+            }, 'http://example.com/phish');
+        }, 500);
+    </script>
+</body>
+</html>

@@ -5,15 +5,28 @@ function showWarning(data, url, onProceed) {
     const existing = document.getElementById('phiswall-warning');
     if (existing) existing.remove();
 
+    const riskLevel = data.risk_level === 'LOW' ? 'low' : (data.risk_score >= 70 ? 'high' : 'suspicious');
+    const shieldIcon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;"><path d="M12 2L4 5V11C4 16.19 7.41 21.05 12 22.3C16.59 21.05 20 16.19 20 11V5L12 2Z" fill="#ffffff" stroke="#ffffff" stroke-width="1.5"/></svg>`;
+
+    if (riskLevel === 'low') {
+        const toast = document.createElement('div');
+        toast.className = 'phiswall-toast';
+        toast.innerHTML = `${shieldIcon} PhishWall Secured`;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'phiswall-toast-fade-out 0.6s forwards';
+            setTimeout(() => toast.remove(), 600);
+        }, 3000);
+        return; // Skip drawing the large overlay for safe sites
+    }
+
     const overlay = document.createElement('div');
     overlay.id = 'phiswall-warning';
     overlay.className = 'phiswall-warning-overlay';
 
-    const riskLevel = data.risk_level === 'LOW' ? 'low' : (data.risk_score >= 70 ? 'high' : 'suspicious');
     const riskBadgeClass = `phiswall-risk-${riskLevel}`;
-    const shieldIcon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;"><path d="M12 2L4 5V11C4 16.19 7.41 21.05 12 22.3C16.59 21.05 20 16.19 20 11V5L12 2Z" fill="#4a90e2" stroke="#ffffff" stroke-width="1.5"/></svg>`;
-    const icon = riskLevel === 'low' ? shieldIcon : (riskLevel === 'high' ? '⚠️' : '⚠️');
-    const title = riskLevel === 'low' ? 'PHISHWALL SECURED' : (riskLevel === 'high' ? 'CRITICAL ALERT' : 'Suspicious Site');
+    const icon = riskLevel === 'high' ? '⚠️' : '⚠️';
+    const title = riskLevel === 'high' ? 'CRITICAL ALERT' : 'Suspicious Site';
 
     overlay.innerHTML = `
         <div class="phiswall-warning-header">
@@ -30,29 +43,41 @@ function showWarning(data, url, onProceed) {
                 ${riskLevel === 'low' ?
             '' :
             `<button class="phiswall-btn phiswall-btn-proceed" id="phiswall-ignore">Proceed Anyway</button>
-                     <button class="phiswall-btn phiswall-btn-block" id="phiswall-safe">Stay Safe</button>`
+             <button class="phiswall-btn phiswall-btn-block" id="phiswall-safe">Stay Safe</button>`
         }
             </div>
+            ${riskLevel !== 'low' ? `<div style="text-align: center; margin-top: 15px;">
+                <a href="#" id="phiswall-report-fp" style="color: #888; font-size: 12px; text-decoration: underline;">Wait, this is a safe site! (Report False Positive)</a>
+            </div>` : ''}
         </div>
     `;
 
     document.body.appendChild(overlay);
 
-    if (riskLevel === 'low') {
-        setTimeout(() => {
-            overlay.style.animation = 'phiswall-fade-out 0.6s forwards';
-            setTimeout(() => overlay.remove(), 600);
-        }, 2500);
-    } else {
-        document.getElementById('phiswall-ignore').onclick = (e) => {
-            overlay.remove();
-            if (onProceed) onProceed();
-        };
+    document.getElementById('phiswall-ignore').onclick = (e) => {
+        overlay.remove();
+        if (onProceed) onProceed();
+    };
         document.getElementById('phiswall-safe').onclick = (e) => {
             overlay.remove();
             if (window.location.href === url) history.back();
         };
-    }
+        document.getElementById('phiswall-report-fp').onclick = (e) => {
+            e.preventDefault();
+            const fpLink = document.getElementById('phiswall-report-fp');
+            fpLink.innerText = "Reporting...";
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({ action: "reportFeedback", url: url, isSafe: true }, (response) => {
+                    fpLink.innerText = "Thanks! The model is learning.";
+                    fpLink.style.color = "#11c05d";
+                    fpLink.style.textDecoration = "none";
+                });
+            } else {
+                fpLink.innerText = "Thanks! The model is learning.";
+                fpLink.style.color = "#11c05d";
+            }
+        };
 
     if (riskLevel === 'high' && window.location.href === url) {
         blockSite(data);
@@ -88,23 +113,40 @@ document.addEventListener('click', (e) => {
     if (anchor && anchor.href && anchor.href.startsWith('http') && !anchor.href.includes('localhost') && !anchor.href.includes('127.0.0.1')) {
         if (anchor.dataset.phiswallVerified === 'true') return;
 
+        // Preserve native behavior for modifier keys (open in new tab/window)
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) {
+            return;
+        }
+
+        // Preserve native behavior for target="_blank" and downloads
+        if (anchor.target === '_blank' || anchor.hasAttribute('download')) {
+            return;
+        }
+
+        // Preserve SPA routing for same-origin links (fixes navigation issues on sites like GitHub)
+        try {
+            if (new URL(anchor.href).origin === window.location.origin) {
+                return;
+            }
+        } catch (err) {}
+
         e.preventDefault();
         e.stopPropagation();
 
         const url = anchor.href;
         chrome.runtime.sendMessage({ action: "scanUrl", url: url }, (response) => {
+            const proceed = () => {
+                anchor.dataset.phiswallVerified = 'true';
+                window.location.href = url;
+            };
+
             if (response && response.success) {
-                showWarning(response.data, url, () => {
-                    anchor.dataset.phiswallVerified = 'true';
-                    anchor.click();
-                });
+                showWarning(response.data, url, proceed);
                 if (response.data.risk_level === 'LOW') {
-                    anchor.dataset.phiswallVerified = 'true';
-                    setTimeout(() => anchor.click(), 500);
+                    setTimeout(proceed, 500);
                 }
             } else {
-                anchor.dataset.phiswallVerified = 'true';
-                anchor.click();
+                proceed();
             }
         });
     }
